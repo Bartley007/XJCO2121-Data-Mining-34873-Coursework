@@ -12,7 +12,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import LabelEncoder
 from tqdm import tqdm
 
-# ===== TensorFlow/Keras导入 =====
+# ===== TensorFlow/Keras Import =====
 try:
     from tensorflow.keras.models import Sequential
     from tensorflow.keras.layers import Embedding, LSTM, Dense, Dropout
@@ -26,7 +26,7 @@ try:
 except ImportError as e:
     raise ImportError("Required TensorFlow/Keras libraries not found. Please install with: pip install tensorflow")
 
-# ===== GPU加速配置 =====
+# ===== GPU Acceleration Configuration =====
 gpus = tf.config.list_physical_devices('GPU')
 if gpus:
     try:
@@ -37,9 +37,9 @@ if gpus:
         print(e)
 
 
-# ================== 混淆矩阵可视化函数 ==================
+# ================== Confusion Matrix Visualization Function ==================
 def plot_confusion_matrix(y_true, y_pred, classes, title, filename):
-    """可视化混淆矩阵"""
+    """Visualize confusion matrix"""
     cm = confusion_matrix(y_true, y_pred)
 
     plt.figure(figsize=(12, 10))
@@ -57,17 +57,17 @@ def plot_confusion_matrix(y_true, y_pred, classes, title, filename):
     plt.close()
 
 
-# ================== 数据加载和预处理 ==================
+# ================== Data Loading and Preprocessing ==================
 print("Loading and preprocessing data...")
 data = pd.read_csv('mbti_1.csv')
 data['cleaned_posts'] = data['posts'].apply(lambda x: ' '.join(
     re.sub(r"http\S+|[^a-zA-Z\s]", "", x).lower().split()))
 
-# 标签编码
+# Label encoding
 le = LabelEncoder()
 y = le.fit_transform(data['type'])
 
-# 分割数据集
+# Split dataset
 X_train_text, X_val_text, y_train, y_val = train_test_split(
     data['cleaned_posts'], y,
     test_size=0.2,
@@ -76,23 +76,23 @@ X_train_text, X_val_text, y_train, y_val = train_test_split(
 )
 
 
-# ================== 优化的LSTM模型 ==================
+# ================== Optimized LSTM Model ==================
 def train_lstm():
     print("\n" + "=" * 50)
     print("Training Optimized LSTM Model")
     print("=" * 50)
 
-    # 文本序列化
+    # Text sequence processing
     tokenizer = Tokenizer(num_words=2000)
     tokenizer.fit_on_texts(X_train_text)
     X_train_seq = pad_sequences(tokenizer.texts_to_sequences(X_train_text), maxlen=100)
     X_val_seq = pad_sequences(tokenizer.texts_to_sequences(X_val_text), maxlen=100)
 
-    # 模型配置
+    # Model configuration
     model = Sequential([
-        Embedding(2000, 64),  # 减少嵌入维度加速训练
+        Embedding(2000, 64),  # Reduced embedding dimension for faster training
         Dropout(0.3),
-        LSTM(64, dropout=0.2),  # 减少单元数
+        LSTM(64, dropout=0.2),  # Reduced units
         Dense(16, activation='softmax')
     ])
     model.compile(
@@ -101,7 +101,7 @@ def train_lstm():
         metrics=['accuracy']
     )
 
-    # 训练循环
+    # Training loop
     lstm_accuracies = []
     for i in tqdm(range(5), desc="LSTM Training"):
         partial_X_train, _, partial_y_train, _ = train_test_split(
@@ -114,7 +114,7 @@ def train_lstm():
         model.fit(
             partial_X_train, partial_y_train,
             epochs=15,
-            batch_size=256,  # 增大batch size加速
+            batch_size=256,  # Increased batch size for faster training
             verbose=0,
             callbacks=[EarlyStopping(patience=2)]
         )
@@ -127,36 +127,36 @@ def train_lstm():
 
 tokenizer, lstm_model, lstm_accuracies = train_lstm()
 
-# ================== 传统模型训练 ==================
+# ================== Traditional Model Training ==================
 print("\n" + "=" * 50)
 print("Training Traditional Models")
 print("=" * 50)
 
-# TF-IDF特征
+# TF-IDF features
 vectorizer = TfidfVectorizer(max_df=0.7, min_df=0.1, max_features=2000)
 X_train_tfidf = vectorizer.fit_transform(X_train_text)
 X_val_tfidf = vectorizer.transform(X_val_text)
 
-# 模型定义
+# Model definitions
 models = {
     "Random Forest": RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42),
     "XGBoost": XGBClassifier(n_estimators=300, max_depth=10, learning_rate=0.01, random_state=42),
     "SVM": SVC(kernel='linear', C=1, probability=True)
 }
 
-# 训练过程及预测保存
+# Training process and prediction storage
 model_accuracies = {"LSTM": lstm_accuracies}
 model_predictions = {}
 for name, model in models.items():
     print(f"\nTraining {name}...")
     accuracies = []
-    full_model = model.__class__(**model.get_params())  # 创建新实例用于完整训练
+    full_model = model.__class__(**model.get_params())  # Create new instance for full training
 
-    # 完整训练用于混淆矩阵
+    # Full training for confusion matrix
     full_model.fit(X_train_tfidf, y_train)
     model_predictions[name] = full_model.predict(X_val_tfidf)
 
-    # 交叉验证精度
+    # Cross-validation accuracy
     for i in range(5):
         partial_X_train, _, partial_y_train, _ = train_test_split(
             X_train_tfidf, y_train,
@@ -169,12 +169,12 @@ for name, model in models.items():
         accuracies.append(accuracy_score(y_val, y_pred))
     model_accuracies[name] = accuracies
 
-# ================== 结果可视化 ==================
+# ================== Result Visualization ==================
 print("\n" + "=" * 50)
 print("Generating Visualizations")
 print("=" * 50)
 
-# 结果表格
+# Results table
 results = {
     "LSTM": np.mean(lstm_accuracies),
     **{name: np.mean(acc) for name, acc in model_accuracies.items() if name != "LSTM"}
@@ -182,7 +182,7 @@ results = {
 results_df = pd.DataFrame(list(results.items()), columns=["Algorithm", "Validation Accuracy"])
 results_df = results_df.sort_values("Validation Accuracy", ascending=False)
 
-# 1. 结果表格图
+# 1. Results table plot
 plt.figure(figsize=(10, 4))
 ax = plt.subplot(111)
 ax.axis('off')
@@ -198,7 +198,7 @@ table.set_fontsize(12)
 table.scale(1.2, 1.5)
 plt.savefig("results_table.png", bbox_inches='tight')
 
-# 2. 折线对比图
+# 2. Accuracy comparison line plot
 plt.figure(figsize=(10, 6))
 x = range(1, 6)
 for name, acc in model_accuracies.items():
@@ -212,16 +212,16 @@ plt.legend()
 plt.tight_layout()
 plt.savefig("accuracy_comparison.png", dpi=300)
 
-# 3. 混淆矩阵可视化
+# 3. Confusion matrix visualization
 print("\nGenerating Confusion Matrices...")
 
-# LSTM混淆矩阵
+# LSTM confusion matrix
 X_val_seq = pad_sequences(tokenizer.texts_to_sequences(X_val_text), maxlen=100)
 y_pred_lstm = np.argmax(lstm_model.predict(X_val_seq, verbose=0), axis=1)
 plot_confusion_matrix(y_val, y_pred_lstm, le.classes_,
                       "LSTM Confusion Matrix", "lstm_confusion.png")
 
-# 传统模型混淆矩阵
+# Traditional model confusion matrices
 for name, y_pred in model_predictions.items():
     plot_confusion_matrix(y_val, y_pred, le.classes_,
                           f"{name} Confusion Matrix",
